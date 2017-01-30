@@ -22,6 +22,7 @@ import filecmp
 from datetime import datetime, timedelta
 import re
 import locale
+from subprocess import call
 
 # Setting locale to the 'local' value
 locale.setlocale(locale.LC_ALL, '')
@@ -222,12 +223,14 @@ class ExifTool(object):
 
 # ---------------------------------------
 
+def callSynoIndex(index_argument, pathname):
+    call(["synoindex", index_argument, pathname])
 
 
 def sortPhotos(src_dir, dest_dir, sort_format, rename_format, recursive=False,
         copy_files=False, test=False, remove_duplicates=True, day_begins=0,
         additional_groups_to_ignore=['File'], additional_tags_to_ignore=[],
-        use_only_groups=None, use_only_tags=None, verbose=True):
+        use_only_groups=None, use_only_tags=None, verbose=True, call_syno_index=False):
     """
     This function is a convenience wrapper around ExifTool based on common usage scenarios for sortphotos.py
 
@@ -265,6 +268,8 @@ def sortPhotos(src_dir, dest_dir, sort_format, rename_format, recursive=False,
         a list of tags that will be exclusived searched across for date info
     verbose : bool
         True if you want to see details of file processing
+    callSynoIndex : bool
+        True if you want to call synoindex for new directories, copied and moved file (should be used on Synology DSM 5.2 and higher only)
 
     """
 
@@ -363,6 +368,8 @@ def sortPhotos(src_dir, dest_dir, sort_format, rename_format, recursive=False,
             dest_file = os.path.join(dest_file, thedir)
             if not os.path.exists(dest_file):
                 os.makedirs(dest_file)
+                if call_syno_index:
+                    callSynoIndex('-A', dest_file)
 
         # rename file if necessary
         filename = os.path.basename(src_file)
@@ -422,8 +429,13 @@ def sortPhotos(src_dir, dest_dir, sort_format, rename_format, recursive=False,
             else:
                 if copy_files:
                     shutil.copy2(src_file, dest_file)
+                    if call_syno_index:
+                        callSynoIndex('-a', dest_file)
                 else:
                     shutil.move(src_file, dest_file)
+                    if call_syno_index:
+                        callSynoIndex('-d', src_file)
+                        callSynoIndex('-a', dest_file)
 
 
 
@@ -480,6 +492,8 @@ def main():
                     default=None,
                     help='specify a restricted set of tags to search for date information\n\
     e.g., EXIF:CreateDate')
+    parser.add_argument('--synology', action='store_true', help='call synoindex for new directories,\n\
+    copied and moved files (should be used on Synology DSM 5.2 and higher only)')
 
     # parse command line arguments
     args = parser.parse_args()
@@ -487,7 +501,7 @@ def main():
     sortPhotos(args.src_dir, args.dest_dir, args.sort, args.rename, args.recursive,
         args.copy, args.test, not args.keep_duplicates, args.day_begins,
         args.ignore_groups, args.ignore_tags, args.use_only_groups,
-        args.use_only_tags, not args.silent)
+        args.use_only_tags, not args.silent, args.synology)
 
 if __name__ == '__main__':
     main()
